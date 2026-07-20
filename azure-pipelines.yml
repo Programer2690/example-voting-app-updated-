@@ -1,0 +1,80 @@
+trigger:
+  - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  dockerHubUsername: 'muhammadhussnainali'
+  dockerRegistryServiceConnection: 'docker'
+  tag: '$(Build.BuildId)'
+
+stages:
+- stage: BuildAndPush
+  displayName: Build and Push Docker Images
+  jobs:
+  - job: BuildPush
+    displayName: Build & Push to Docker Hub
+    steps:
+
+    # Step 1: Login to Docker Hub
+    - task: Docker@2
+      displayName: Login to Docker Hub
+      inputs:
+        command: 'login'
+        containerRegistry: '$(dockerRegistryServiceConnection)'
+
+    # Step 2: Build images using Docker Compose
+    - script: |
+        docker compose -f docker-compose.yml build
+      displayName: 'Build Images'
+
+    # Step 3: Tag and Push using precise image discovery
+    - script: |
+        set -e # Exit immediately on error
+        
+        # 1. Identify built image IDs/names from Compose
+        VOTE_IMG=$(docker images --format '{{.Repository}}:{{.Tag}}' | grep 'vote' | head -n 1)
+        RESULT_IMG=$(docker images --format '{{.Repository}}:{{.Tag}}' | grep 'result' | head -n 1)
+        WORKER_IMG=$(docker images --format '{{.Repository}}:{{.Tag}}' | grep 'worker' | head -n 1)
+
+        echo "Found Vote Image: $VOTE_IMG"
+        echo "Found Result Image: $RESULT_IMG"
+        echo "Found Worker Image: $WORKER_IMG"
+
+        # 2. Tag and Push Vote
+        docker tag $VOTE_IMG $(dockerHubUsername)/examplevotingapp_vote:$(tag)
+        docker tag $VOTE_IMG $(dockerHubUsername)/examplevotingapp_vote:latest
+        docker push $(dockerHubUsername)/examplevotingapp_vote:$(tag)
+        docker push $(dockerHubUsername)/examplevotingapp_vote:latest
+
+        # 3. Tag and Push Result
+        docker tag $RESULT_IMG $(dockerHubUsername)/examplevotingapp_result:$(tag)
+        docker tag $RESULT_IMG $(dockerHubUsername)/examplevotingapp_result:latest
+        docker push $(dockerHubUsername)/examplevotingapp_result:$(tag)
+        docker push $(dockerHubUsername)/examplevotingapp_result:latest
+
+        # 4. Tag and Push Worker
+        docker tag $WORKER_IMG $(dockerHubUsername)/examplevotingapp_worker:$(tag)
+        docker tag $WORKER_IMG $(dockerHubUsername)/examplevotingapp_worker:latest
+        docker push $(dockerHubUsername)/examplevotingapp_worker:$(tag)
+        docker push $(dockerHubUsername)/examplevotingapp_worker:latest
+      displayName: 'Tag and Push Images to Docker Hub'
+
+- stage: Run
+  displayName: Run Application
+  dependsOn: BuildAndPush
+  jobs:
+  - job: RunServices
+    displayName: Spin up Application Services
+    steps:
+
+    # Step 4: Run services using pre-built images via docker-compose.images.yml
+    - script: |
+        docker compose -f docker-compose.images.yml up -d
+      displayName: 'Start Application with Docker Compose'
+
+    # Step 5: Verify running containers
+    - script: |
+        docker ps
+      displayName: 'Verify Running Containers'
