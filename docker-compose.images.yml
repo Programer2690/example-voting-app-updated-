@@ -1,12 +1,8 @@
-# for running in docker compose with prebuilt images
-
-# version is now using "compose spec"
-# v2 and v3 are now combined!
-# docker-compose v1.27+ required
+# for running in docker compose with prebuilt images from Docker Hub
 
 services:
   vote:
-    image: dockersamples/examplevotingapp_vote
+    image: muhammadhussnainali/examplevotingapp_vote:latest
     depends_on:
       redis:
         condition: service_healthy 
@@ -17,7 +13,7 @@ services:
       - back-tier
 
   result:
-    image: dockersamples/examplevotingapp_result
+    image: muhammadhussnainali/examplevotingapp_result:latest
     depends_on:
       db:
         condition: service_healthy 
@@ -28,7 +24,7 @@ services:
       - back-tier
 
   worker:
-    image: dockersamples/examplevotingapp_worker
+    image: muhammadhussnainali/examplevotingapp_worker:latest
     depends_on:
       redis:
         condition: service_healthy 
