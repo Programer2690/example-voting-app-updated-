@@ -1,65 +1,128 @@
 # Example Voting App
 
-A simple distributed application running across multiple Docker containers.
+A simple distributed application running across multiple Docker containers, updated to support custom Docker Hub prebuilt images and integrated with Azure DevOps CI/CD workflows.
 
-## Getting started
+---
 
-Download [Docker Desktop](https://www.docker.com/products/docker-desktop) for Mac or Windows. [Docker Compose](https://docs.docker.com/compose) will be automatically installed. On Linux, make sure you have the latest version of [Compose](https://docs.docker.com/compose/install/).
+## Architecture Overview
 
-This solution uses Python, Node.js, .NET, with Redis for messaging and Postgres for storage.
+![Architecture diagram](architecture.excalidraw.png)
 
-Run in this directory to build and run the app:
+* **Vote App (`Python/Flask`):** Front-end web app letting users vote between two options.
+* **Redis:** In-memory key-value store collecting new votes.
+* **Worker (`.NET`):** Background worker consuming votes from Redis and persisting them into Postgres.
+* **Database (`Postgres 15`):** Relational database backed by a named Docker volume (`db-data`).
+* **Result App (`Node.js`):** Web application displaying live voting results in real time.
+
+---
+
+## Quick Start (Running with Prebuilt Images)
+
+This repository includes a dedicated `docker-compose.images.yml` configured to pull prebuilt container images directly from Docker Hub (`muhammadhussnainali`).
+
+### Prerequisites
+
+* [Docker Desktop](https://www.docker.com/products/docker-desktop) installed and running.
+
+### 1. Pull & Start the Stack
+
+Run the compose file to spin up all 5 microservices:
 
 ```shell
-docker compose up
+docker compose -f docker-compose.images.yml up -d
 ```
 
-The `vote` app will be running at [http://localhost:8080](http://localhost:8080), and the `results` will be at [http://localhost:8081](http://localhost:8081).
+### 2. Access the Applications
 
-Alternately, if you want to run it on a [Docker Swarm](https://docs.docker.com/engine/swarm/), first make sure you have a swarm. If you don't, run:
+* Voting App: http://localhost:8080
+* Result App: http://localhost:8081
+
+### 3. Verification
+
+Check the status of running containers:
 
 ```shell
-docker swarm init
+docker ps
 ```
 
-Once you have your swarm, in this directory run:
+To stop all running services:
 
 ```shell
-docker stack deploy --compose-file docker-stack.yml vote
+docker compose -f docker-compose.images.yml down
 ```
 
-## Run the app in Kubernetes
+---
 
-The folder k8s-specifications contains the YAML specifications of the Voting App's services.
+## Building Multi-Stage Docker Images
 
-Run the following command to create the deployments and services. Note it will create these resources in your current namespace (`default` if you haven't changed it.)
+The vote service uses a multi-stage Dockerfile (`base`, `dev`, `final`). To ensure application source files are baked directly into the production container, explicitly target the `final` stage during builds:
+
+```shell
+# Build production image targeting 'final' stage
+docker build --target final -t muhammadhussnainali/examplevotingapp_vote:latest ./vote
+
+# Push updated image to Docker Hub
+docker push muhammadhussnainali/examplevotingapp_vote:latest
+```
+
+---
+
+## Azure DevOps Integration
+
+This repository is synced with Azure DevOps for continuous integration and source control management.
+
+* **Azure DevOps Org:** `hasnainali2690`
+* **Project & Repository Name:** `votingapp`
+* **Repository URL:** https://dev.azure.com/hasnainali2690/_git/votingapp
+
+### Syncing Local Repository
+
+If you re-clone or update remote tracking locally, configure the remote URL using:
+
+```shell
+git remote set-url origin https://dev.azure.com/hasnainali2690/_git/votingapp
+git fetch origin
+git status
+```
+
+---
+
+## Other Deployment Modes
+
+### Running in Kubernetes
+
+Deploy the manifest specifications stored in the `k8s-specifications/` directory:
 
 ```shell
 kubectl create -f k8s-specifications/
 ```
 
-The `vote` web app is then available on port 31000 on each host of the cluster, the `result` web app is available on port 31001.
+* Vote App: Available on port `31000`
+* Result App: Available on port `31001`
 
-To remove them, run:
+To remove deployment resources:
 
 ```shell
 kubectl delete -f k8s-specifications/
 ```
 
-## Architecture
+### Running in Docker Swarm
 
-![Architecture diagram](architecture.excalidraw.png)
+Initialize your swarm (if not already running):
 
-* A front-end web app in [Python](/vote) which lets you vote between two options
-* A [Redis](https://hub.docker.com/_/redis/) which collects new votes
-* A [.NET](/worker/) worker which consumes votes and stores them in…
-* A [Postgres](https://hub.docker.com/_/postgres/) database backed by a Docker volume
-* A [Node.js](/result) web app which shows the results of the voting in real time
+```shell
+docker swarm init
+```
+
+Deploy using the stack specification:
+
+```shell
+docker stack deploy --compose-file docker-stack.yml vote
+```
+
+---
 
 ## Notes
 
-The voting application only accepts one vote per client browser. It does not register additional votes if a vote has already been submitted from a client.
-
-This isn't an example of a properly architected perfectly designed distributed app... it's just a simple
-example of the various types of pieces and languages you might see (queues, persistent data, etc), and how to
-deal with them in Docker at a basic level.
+* The voting application accepts one vote per client browser using standard session cookies.
+* This repository is designed as a practical learning blueprint for containerization, multi-service network orchestration, and Azure DevOps CI/CD integration.
